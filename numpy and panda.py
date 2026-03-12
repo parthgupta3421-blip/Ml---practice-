@@ -3,6 +3,16 @@ import pandas as pd
 
 # importing data csv 
 df = pd.read_csv("dirty_cafe_sales.csv")
+
+# standardize column names to lowercase without spaces for easier access
+# e.g. 'Price Per Unit' -> 'price_per_unit'
+df.columns = (
+    df.columns
+      .str.strip()
+      .str.lower()
+      .str.replace(' ', '_')
+)
+
 print(df.head())
  
 # checking missing values 
@@ -15,23 +25,38 @@ print(df.info())
 df.replace("unknown",np.nan,inplace=True)
 
 #convert numeric values
-df["quantity"]=pd.to_numeric(df["quantity"],errors="coerce")
-df["price per unit"]=pd.to_numeric(df["price per unit"],errors="coerce")
-df["total spent"]=pd.to_numeric(df["total spent"],errors="coerce")
+# use normalized column names
+numeric_cols = ["quantity", "price_per_unit", "total_spent"]
+for col in numeric_cols:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
 
 #handle missing values
-df["quantity"].fillna(df["quantity"].median(),inplace=True)
-df["price per unit"].fillna(df["price per unit"].median(),inplace=True)
-df["total spent"].fillna(df["total spent"].median(),inplace=True)
+# numeric columns
+for col in ["quantity", "price_per_unit", "total_spent"]:
+    df[col] = df[col].fillna(df[col].median())
 
-df["item"].fillna(df["item"].mode()[0],inplace=True)
-df["payment method"].fillna(df["payment method"].mode()[0],inplace=True)
-df["location"].fillna(df["location"].mode()[0],inplace=True)
+# categorical columns
+for col in ["item", "payment_method", "location"]:
+    df[col] = df[col].fillna(df[col].mode()[0])
 
-df["transaction date"]= pd.to_datetime(df["transaction date"])
+# convert dates with coercion for invalid entries
+# using assignment on DataFrame directly avoids chained assignment warnings
+df = df.assign(transaction_date=pd.to_datetime(df["transaction_date"], errors="coerce"))
+
+# fill any remaining NaT values with the median date so all rows have a timestamp
+df["transaction_date"] = df["transaction_date"].fillna(df["transaction_date"].median())
 
 #remove duplicates
 df.drop_duplicates(inplace=True)
 
 # checking 
-df["total spent"]=df["quantity"]*df["price per unit"]
+# recalc total spent after cleaning (columns are normalized)
+df["total_spent"] = df["quantity"] * df["price_per_unit"]
+
+#final check 
+print(df.info())
+print(df.describe())
+print(df.isnull().sum())
+
+#save clean dataset 
+df.to_csv("clean_transactions.csv",index=False)
